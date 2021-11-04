@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/kelseyhightower/envconfig"
+	"io/ioutil"
 	"log"
 	"net/http"
 )
@@ -23,14 +24,14 @@ type User struct {
 			Lat string `json:"lat"`
 			Lng string `json:"lng"`
 		} `json:"geo"`
-	} `json:"address"`
-	Phone   string `json:"phone"`
-	Website string `json:"website"`
+	} `json:"address,omitempty"`
+	Phone   string `json:"phone,omitempty"`
+	Website string `json:"website,omitempty"`
 	Company struct {
 		Name        string `json:"name"`
 		CatchPhrase string `json:"catchPhrase"`
 		Bs          string `json:"bs"`
-	} `json:"company"`
+	} `json:"company,omitempty"`
 }
 
 type Post struct {
@@ -74,12 +75,11 @@ func(c Client) GetUserInfo(ctx context.Context, userID string) (User, error) {
 		return User{}, err
 	}
 	resp, err := c.client.Do(req)
-	if err != nil {
+	if err = checkResponse(resp); err != nil {
 		return User{}, err
 	}
 	defer resp.Body.Close()
 
-	//TODO handle different http statuses
 	var user User
 	if err = json.NewDecoder(resp.Body).Decode(&user); err != nil {
 		return User{}, err
@@ -93,12 +93,33 @@ func (c Client) GetUserPosts(ctx context.Context, userID string) ([]Post, error)
 		return nil, err
 	}
 	resp, err := c.client.Do(req)
-	if err != nil {
+	if err = checkResponse(resp); err != nil {
 		return nil, err
 	}
+	defer resp.Body.Close()
+
 	var posts []Post
 	if err = json.NewDecoder(resp.Body).Decode(&posts); err != nil {
 		return nil, err
 	}
 	return posts, nil
+}
+
+// CheckResponse checks an API response and returns and error if
+// API returns an error response.
+func checkResponse(resp *http.Response) error {
+	if resp.StatusCode >= 200 && resp.StatusCode <= 299 {
+		return nil
+	}
+
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return err
+	}
+	return fmt.Errorf(
+		"API response error status=%d body=%s path=%s",
+		resp.StatusCode,
+		string(body),
+		resp.Request.URL.Path,
+	)
 }
