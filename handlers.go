@@ -9,12 +9,13 @@ import (
 	"github.com/rs/zerolog"
 	"io/ioutil"
 	"net/http"
+	"runtime/debug"
 )
 
 type UserInfoResponse struct {
-	Id       int `json:"id"`
-	UserInfo UserInfo `json:"userInfo"`
-	Posts 	[]UserPost`json:"posts"`
+	Id       int 		`json:"id"`
+	UserInfo UserInfo 	`json:"userInfo"`
+	Posts 	[]UserPost	`json:"posts"`
 }
 type UserInfo struct {
 	Name     string `json:"name"`
@@ -87,12 +88,20 @@ func (h Handler) MiddlewareLogger(next http.Handler) http.Handler {
 		wrappedWriter := middleware.NewWrapResponseWriter(w, r.ProtoMajor)
 
 		defer func() {
+			// Recover and record stack traces in case of a panic
+			if err := recover(); err != nil {
+				h.logger.Error().
+					Interface("recover_info", err).
+					Bytes("debug_stack", debug.Stack()).
+					Msgf("server error url=%s method=%s", r.URL, r.Method)
+				http.Error(wrappedWriter, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+				return
+			}
+
 			logEvent := h.logger.Info()
 			httpStatus := wrappedWriter.Status()
 			if httpStatus >= http.StatusInternalServerError {
 				logEvent = h.logger.Error()
-			} else if httpStatus >= http.StatusBadRequest {
-				logEvent = h.logger.Warn()
 			}
 			body, _ := ioutil.ReadAll(r.Body)
 			logEvent.
@@ -117,11 +126,6 @@ func (h Handler) handleErrorResponse(err error, w http.ResponseWriter, r *http.R
 				Err(apiClientError).
 				Int("status", apiClientError.StatusCode).
 				Msg("client API returned a server error")
-		} else {
-			h.logger.Warn().
-				Err(apiClientError).
-				Int("status", apiClientError.StatusCode).
-				Msg("client API returned a potential error")
 		}
 		w.WriteHeader(apiClientError.StatusCode)
 		if err = json.NewEncoder(w).Encode(apiClientError); err != nil {
@@ -132,6 +136,7 @@ func (h Handler) handleErrorResponse(err error, w http.ResponseWriter, r *http.R
 		return
 	}
 	serverErrorResp := NewServerErrorResponse(err, r.URL.String(), http.StatusInternalServerError)
+	h.logger.Error().Err(err).Msg("internal server error")
 	w.WriteHeader(serverErrorResp.StatusCode)
 	if err = json.NewEncoder(w).Encode(&serverErrorResp); err != nil {
 		h.logger.Error().Err(err).Msg("unable to encode ServerErrorResponse to JSON")

@@ -28,7 +28,7 @@ func TestGetUserInfo(t *testing.T) {
 		}))
 		defer testServer.Close()
 
-		client := NewClient(Config{
+		client := NewDefaultClient(Config{
 			BaseURL: testServer.URL,
 		})
 
@@ -48,7 +48,7 @@ func TestGetUserInfo(t *testing.T) {
 		}))
 		defer testServer.Close()
 
-		client := NewClient(Config{
+		client := NewDefaultClient(Config{
 			BaseURL: testServer.URL,
 		})
 
@@ -85,7 +85,7 @@ func TestGetUserPosts(t *testing.T) {
 		}))
 		defer testServer.Close()
 
-		client := NewClient(Config{
+		client := NewDefaultClient(Config{
 			BaseURL: testServer.URL,
 		})
 
@@ -105,7 +105,7 @@ func TestGetUserPosts(t *testing.T) {
 		}))
 		defer testServer.Close()
 
-		client := NewClient(Config{
+		client := NewDefaultClient(Config{
 			BaseURL: testServer.URL,
 		})
 

@@ -186,13 +186,10 @@ func TestHandleErrorResponse(t *testing.T) {
 		})
 		t.Run("http non 500 status code", func(t *testing.T) {
 			res := callErrorHandlerWithApiClientError(handler, http.StatusNotFound, req)
-			logResult := convertJSONToMap(out)
 			assert.Equal(t, http.StatusNotFound, res.Result().StatusCode)
 			assert.JSONEq(t,
 				`{"statusCode":404,"msg":"API returned an invalid or empty response","url":"/v1/user-posts/1"}`,
 				res.Body.String())
-			assert.EqualValues(t, http.StatusNotFound, logResult["status"])
-			assert.Equal(t, "client API returned a potential error", logResult["message"])
 			out.Reset()
 		})
 	})

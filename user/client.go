@@ -2,11 +2,8 @@ package user
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"github.com/kelseyhightower/envconfig"
 	"io/ioutil"
-	"log"
 	"net/http"
 )
 
@@ -41,81 +38,9 @@ type Post struct {
 	Body   string `json:"body"`
 }
 
-type DefaultClient struct {
-	baseURL string
-	client  *http.Client
-}
-
 type Client interface {
 	GetUserInfo(ctx context.Context, userID string) (User, error)
 	GetUserPosts(ctx context.Context, userID string) ([]Post, error)
-}
-
-type Config struct {
-	BaseURL string	`envconfig:"BASE_URL" default:"https://jsonplaceholder.typicode.com"`
-}
-
-func NewConfig() Config {
-	var c Config
-	err := envconfig.Process("userApi", &c)
-	if err != nil {
-		log.Fatal(err.Error())
-	}
-	return c
-}
-
-func NewClient(c Config) Client {
-	client := http.Client{
-		Transport: http.DefaultTransport,
-	}
-	return DefaultClient{
-		client:  &client,
-		baseURL: c.BaseURL,
-	}
-}
-
-// GetUserInfo fetches user information from the User API
-func(c DefaultClient) GetUserInfo(ctx context.Context, userID string) (User, error) {
-	req, err := http.NewRequestWithContext(ctx, "GET", fmt.Sprintf("%s/users/%s", c.baseURL, userID), nil)
-	if err != nil {
-		return User{}, err
-	}
-	resp, err := c.client.Do(req)
-	if err != nil {
-		return User{}, err
-	}
-	if err = checkResponse(resp); err != nil {
-		return User{}, err
-	}
-	defer resp.Body.Close()
-
-	var user User
-	if err = json.NewDecoder(resp.Body).Decode(&user); err != nil {
-		return User{}, err
-	}
-	return user, nil
-}
-
-// GetUserPosts fetches posts for a user from the UserPost API
-func (c DefaultClient) GetUserPosts(ctx context.Context, userID string) ([]Post, error) {
-	req, err := http.NewRequestWithContext(ctx, "GET", fmt.Sprintf("%s/posts?userId=%s", c.baseURL, userID), nil)
-	if err != nil {
-		return nil, err
-	}
-	resp, err := c.client.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	if err = checkResponse(resp); err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	var posts []Post
-	if err = json.NewDecoder(resp.Body).Decode(&posts); err != nil {
-		return nil, err
-	}
-	return posts, nil
 }
 
 // CheckResponse checks an API response and returns and error if
@@ -140,10 +65,11 @@ func NewAPIClientError(resp *http.Response, req *http.Request) APIClientError {
 	if err != nil {
 		return APIClientError{}
 	}
-	j := string(body); if j != "{}" && j != "" {
+	if j := string(body); j != "{}" && j != "" {
 		return APIClientError{
 			StatusCode: resp.StatusCode,
-			Body: string(body),
+			Body: j,
+			Msg: "API returned an error",
 			URL: req.URL.String(),
 		}
 	}

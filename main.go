@@ -29,7 +29,7 @@ func main() {
 	}
 
 	userConfig := user.NewConfig()
-	userClient := user.NewClient(userConfig)
+	userClient := user.NewDefaultClient(userConfig)
 	h := NewHandler(userClient, logger)
 
 	r := chi.NewRouter()
@@ -42,8 +42,7 @@ func main() {
 		Handler: r,
 	}
 	logger.Info().Msgf("server listening on port %d", config.ServerPort)
-	err = s.ListenAndServe()
-	if err != nil {
+	if err = s.ListenAndServe(); err != nil {
 		logger.Fatal().Err(err)
 	}
 }
