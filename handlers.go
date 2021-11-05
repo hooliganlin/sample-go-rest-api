@@ -2,10 +2,12 @@ package main
 
 import (
 	"encoding/json"
-	"fmt"
 	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/chi/v5/middleware"
 	"github.com/hooliganlin/simple-go-rest-api/user"
-	"log"
+	"github.com/pkg/errors"
+	"github.com/rs/zerolog"
+	"io/ioutil"
 	"net/http"
 )
 
@@ -25,44 +27,120 @@ type UserPost struct {
 	Body  string `json:"body"`
 }
 
-type Handler struct {
-	userClient user.Client
+// ServerErrorResponse is the error server response. It returns the reason, http status code,
+// and request url for the response.
+type ServerErrorResponse struct {
+	StatusCode int 		`json:"statusCode"`
+	RequestUrl string 	`json:"requestUrl"`
+	Msg	string 			`json:"msg"`
 }
-
-func NewHandler(client user.Client) Handler {
-	return Handler{
-		userClient: client,
+func (in ServerErrorResponse) Error() string {
+	return in.Msg
+}
+func NewServerErrorResponse(err error, requestUrl string, statusCode int) ServerErrorResponse {
+	return ServerErrorResponse {
+		StatusCode: statusCode,
+		RequestUrl: requestUrl,
+		Msg: err.Error(),
 	}
 }
 
+type Handler struct {
+	userClient user.Client
+	logger zerolog.Logger
+}
+
+func NewHandler(client user.Client, logger zerolog.Logger) Handler {
+	return Handler{
+		userClient: client,
+		logger: logger,
+	}
+}
+
+// GetUserPostsHandler receives a userId and calls the UserAPI to fetch a user info along with the
+// user's posts.
 func(h Handler) GetUserPostsHandler(w http.ResponseWriter, r *http.Request) {
 	userID := chi.URLParam(r, "id")
 	u, err := h.userClient.GetUserInfo(r.Context(), userID)
 	if err != nil {
-		//TODO return 500 since it's a legit error or we can wrap an error
-		msg := fmt.Sprintf("Could not get user from uri=%s err=%v", r.RequestURI, err)
-		log.Printf("[ERROR] %s", msg)
-		http.Error(w, msg, http.StatusInternalServerError)
+		h.handleErrorResponse(err, w, r)
 		return
 	}
 
 	posts, err := h.userClient.GetUserPosts(r.Context(), userID)
 	if err != nil {
-		msg := fmt.Sprintf("Could not get posts for userId=$s uri=%s err=%v", r.RequestURI, err)
-		log.Printf("[ERROR] %s", msg)
-		http.Error(w, msg, http.StatusInternalServerError)
+		h.handleErrorResponse(err, w, r)
 		return
 	}
 
 	userInfo := toUserInfoResponse(u, posts)
 	if err = json.NewEncoder(w).Encode(userInfo); err != nil {
-		msg := fmt.Sprintf("Could not encode UserInfoResponse to JSON err=%v",  err)
-		log.Printf("[ERROR] %s", msg)
-		http.Error(w, msg, http.StatusInternalServerError)
+		h.handleErrorResponse(err, w, r)
 		return
 	}
 }
 
+// MiddlewareLogger is a http interceptor and logs each request that comes in and determines the log level based on
+// the http status code that will be returned by the server.
+func (h Handler) MiddlewareLogger(next http.Handler) http.Handler {
+	handlerFunc := func(w http.ResponseWriter, r *http.Request) {
+		wrappedWriter := middleware.NewWrapResponseWriter(w, r.ProtoMajor)
+
+		defer func() {
+			logEvent := h.logger.Info()
+			httpStatus := wrappedWriter.Status()
+			if httpStatus >= http.StatusInternalServerError {
+				logEvent = h.logger.Error()
+			} else if httpStatus >= http.StatusBadRequest {
+				logEvent = h.logger.Warn()
+			}
+			body, _ := ioutil.ReadAll(r.Body)
+			logEvent.
+				Str("url", r.URL.Path).
+				Str("method", r.Method).
+				Str("body", string(body)).
+				Int("status", httpStatus).
+				Msgf("incoming request for %s", r.URL.Path)
+		}()
+		next.ServeHTTP(wrappedWriter, r)
+	}
+	return http.HandlerFunc(handlerFunc)
+}
+
+// handleErrorResponse logs and returns the appropriate http response code and response for errors from
+// the client API or from an actual internal server error.
+func (h Handler) handleErrorResponse(err error, w http.ResponseWriter, r *http.Request) {
+	var apiClientError user.APIClientError
+	if ok := errors.As(err,&apiClientError); ok {
+		if apiClientError.StatusCode >= http.StatusInternalServerError {
+			h.logger.Error().
+				Err(apiClientError).
+				Int("status", apiClientError.StatusCode).
+				Msg("client API returned a server error")
+		} else {
+			h.logger.Warn().
+				Err(apiClientError).
+				Int("status", apiClientError.StatusCode).
+				Msg("client API returned a potential error")
+		}
+		w.WriteHeader(apiClientError.StatusCode)
+		if err = json.NewEncoder(w).Encode(apiClientError); err != nil {
+			h.logger.Error().Err(err).Msg("unable to encode APIClientError to JSON")
+			http.Error(w, "unable to encode APIClientError to JSON", http.StatusInternalServerError)
+			return
+		}
+		return
+	}
+	serverErrorResp := NewServerErrorResponse(err, r.URL.String(), http.StatusInternalServerError)
+	w.WriteHeader(serverErrorResp.StatusCode)
+	if err = json.NewEncoder(w).Encode(&serverErrorResp); err != nil {
+		h.logger.Error().Err(err).Msg("unable to encode ServerErrorResponse to JSON")
+		http.Error(w, "unable to encode ServerErrorResponse to JSON", http.StatusInternalServerError)
+		return
+	}
+}
+
+// toUserInfoResponse combines all the user.Post into a user.User
 func toUserInfoResponse(user user.User, posts []user.Post) UserInfoResponse {
 	userInfoResp := UserInfoResponse{
 		Id: user.Id,

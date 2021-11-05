@@ -3,6 +3,7 @@ package user
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"github.com/stretchr/testify/assert"
 	"net/http"
 	"net/http/httptest"
@@ -21,7 +22,6 @@ func TestGetUserInfo(t *testing.T) {
 			if err := json.NewEncoder(w).Encode(expectedUser); err != nil {
 				t.Error(err, "could not encode user to JSON")
 			}
-			w.WriteHeader(200)
 		}
 		testServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			handler(w, r)
@@ -54,7 +54,7 @@ func TestGetUserInfo(t *testing.T) {
 
 		u, err := client.GetUserInfo(context.Background(), "user_1")
 		assert.Error(t, err)
-		assert.Equal(t, "API response error status=404 body= path=/users/user_1", err.Error())
+		assert.Equal(t, fmt.Sprintf("API response error statusCode=404 body= url=%s/users/user_1", testServer.URL), err.Error())
 		assert.Equal(t, User{}, u)
 	})
 }
@@ -79,7 +79,6 @@ func TestGetUserPosts(t *testing.T) {
 			if err := json.NewEncoder(w).Encode(expectedPosts); err != nil {
 				t.Error(err, "could not encode posts to JSON")
 			}
-			w.WriteHeader(200)
 		}
 		testServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			handler(w, r)

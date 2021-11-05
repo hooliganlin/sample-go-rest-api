@@ -6,8 +6,9 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/hooliganlin/simple-go-rest-api/user"
 	"github.com/kelseyhightower/envconfig"
-	"log"
+	"github.com/rs/zerolog"
 	"net/http"
+	"os"
 )
 
 type AppConfig struct {
@@ -16,22 +17,34 @@ type AppConfig struct {
 }
 
 func main() {
+	logger := zerolog.New(zerolog.MultiLevelWriter(os.Stdout)).
+		With().
+		Timestamp().
+		Logger()
+
 	var config AppConfig
 	err := envconfig.Process("myapp", &config)
 	if err != nil {
-		log.Fatal(err.Error())
+		logger.Fatal().Err(err)
 	}
 
 	userConfig := user.NewConfig()
 	userClient := user.NewClient(userConfig)
-	h := NewHandler(userClient)
+	h := NewHandler(userClient, logger)
 
 	r := chi.NewRouter()
-	r.Use(middleware.Logger)
+	r.Use(h.MiddlewareLogger)
+	r.Use(middleware.Recoverer)
 	r.Get("/v1/user-posts/{id}", h.GetUserPostsHandler)
 
-	err = http.ListenAndServe(fmt.Sprintf("%s:%d", config.ServerHost, config.ServerPort), r)
+	s := http.Server {
+		Addr: fmt.Sprintf("%s:%d", config.ServerHost, config.ServerPort),
+		Handler: r,
+	}
+	logger.Info().Msgf("server listening on port %d", config.ServerPort)
+	err = s.ListenAndServe()
 	if err != nil {
-		log.Fatal(err.Error())
+		logger.Fatal().Err(err)
 	}
 }
+
