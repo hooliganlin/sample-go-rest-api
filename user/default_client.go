@@ -10,7 +10,7 @@ import (
 )
 
 type Config struct {
-	BaseURL string	`envconfig:"BASE_URL" default:"https://jsonaplaceholder.typicode.com"`
+	BaseURL string	`envconfig:"BASE_URL" default:"https://jsonplaceholder.typicode.com"`
 }
 
 func NewConfig() Config {
