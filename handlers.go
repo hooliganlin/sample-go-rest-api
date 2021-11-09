@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/hooliganlin/simple-go-rest-api/user"
@@ -10,6 +11,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"runtime/debug"
+	"time"
 )
 
 type UserInfoResponse struct {
@@ -86,7 +88,7 @@ func(h Handler) GetUserPostsHandler(w http.ResponseWriter, r *http.Request) {
 func (h Handler) MiddlewareLogger(next http.Handler) http.Handler {
 	handlerFunc := func(w http.ResponseWriter, r *http.Request) {
 		wrappedWriter := middleware.NewWrapResponseWriter(w, r.ProtoMajor)
-
+		startTime := time.Now()
 		defer func() {
 			// Recover and record stack traces in case of a panic
 			if err := recover(); err != nil {
@@ -109,7 +111,9 @@ func (h Handler) MiddlewareLogger(next http.Handler) http.Handler {
 				Str("method", r.Method).
 				Str("body", string(body)).
 				Int("status", httpStatus).
+				Str("duration", fmt.Sprintf("%.4fms", time.Since(startTime).Seconds() * 1000)).
 				Msgf("incoming request for %s", r.URL.Path)
+			startTime = time.Now()
 		}()
 		next.ServeHTTP(wrappedWriter, r)
 	}
