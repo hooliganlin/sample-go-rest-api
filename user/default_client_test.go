@@ -30,7 +30,7 @@ func TestGetUserInfo(t *testing.T) {
 
 		client := NewDefaultClient(Config{
 			BaseURL: testServer.URL,
-		})
+		}, noopCache{})
 
 		u, err := client.GetUserInfo(context.Background(), "user_1")
 		if err != nil {
@@ -50,7 +50,7 @@ func TestGetUserInfo(t *testing.T) {
 
 		client := NewDefaultClient(Config{
 			BaseURL: testServer.URL,
-		})
+		}, noopCache{})
 
 		u, err := client.GetUserInfo(context.Background(), "user_1")
 		assert.Error(t, err)
@@ -87,7 +87,7 @@ func TestGetUserPosts(t *testing.T) {
 
 		client := NewDefaultClient(Config{
 			BaseURL: testServer.URL,
-		})
+		}, noopCache{})
 
 		posts, err := client.GetUserPosts(context.Background(), "user_1")
 		if err != nil {
@@ -107,9 +107,15 @@ func TestGetUserPosts(t *testing.T) {
 
 		client := NewDefaultClient(Config{
 			BaseURL: testServer.URL,
-		})
+		}, noopCache{})
 
 		_, err := client.GetUserPosts(context.Background(), "user_1")
 		assert.Error(t, err)
 	})
 }
+
+type noopCache struct {}
+func (c noopCache) Get(_ string) (interface{}, bool) {
+	return nil, false
+}
+func (c noopCache) Set(_ string, _ interface{}) {}
