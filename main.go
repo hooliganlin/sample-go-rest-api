@@ -33,7 +33,7 @@ func main() {
 	}
 
 	//set cache
-	c := cache.NewDefaultCache(config.CacheTTL, config.CacheTTLInterval)
+	c :=  cache.NewDefaultCache(config.CacheTTL, config.CacheTTLInterval)
 
 	userConfig := user.NewConfig()
 	userClient := user.NewDefaultClient(userConfig, c)

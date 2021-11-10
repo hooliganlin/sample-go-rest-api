@@ -8,9 +8,11 @@ import (
 	"github.com/hooliganlin/simple-go-rest-api/user"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
+	"golang.org/x/sync/errgroup"
 	"io/ioutil"
 	"net/http"
 	"runtime/debug"
+	"strconv"
 	"time"
 )
 
@@ -64,20 +66,48 @@ func NewHandler(client user.Client, logger zerolog.Logger) Handler {
 // user's posts.
 func(h Handler) GetUserPostsHandler(w http.ResponseWriter, r *http.Request) {
 	userID := chi.URLParam(r, "id")
-	u, err := h.userClient.GetUserInfo(r.Context(), userID)
-	if err != nil {
+	userInfo := make(chan user.User, 1)
+
+	g, ctx := errgroup.WithContext(r.Context())
+	g.Go(func() error {
+		defer close(userInfo)
+		u, err := h.userClient.GetUserInfo(ctx, userID)
+		if err != nil {
+			return err
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case userInfo <- u:
+		}
+		return nil
+	})
+
+	resp := make(chan UserInfoResponse, 1)
+	g.Go(func() error {
+		defer close(resp)
+		for u := range userInfo {
+			posts, err := h.userClient.GetUserPosts(ctx, strconv.Itoa(u.Id))
+			if err != nil {
+				return err
+			}
+			res := toUserInfoResponse(u, posts)
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case resp <- res:
+			}
+		}
+		return nil
+	})
+
+	if err := g.Wait(); err != nil {
 		h.handleErrorResponse(err, w, r)
 		return
 	}
 
-	posts, err := h.userClient.GetUserPosts(r.Context(), userID)
-	if err != nil {
-		h.handleErrorResponse(err, w, r)
-		return
-	}
-
-	userInfo := toUserInfoResponse(u, posts)
-	if err = json.NewEncoder(w).Encode(userInfo); err != nil {
+	userInfoResp := <-resp
+	if err := json.NewEncoder(w).Encode(userInfoResp); err != nil {
 		h.handleErrorResponse(err, w, r)
 		return
 	}
