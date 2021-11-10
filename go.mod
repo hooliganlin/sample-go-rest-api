@@ -14,7 +14,9 @@ require (
 )
 
 require (
-	github.com/hashicorp/go-cleanhttp v0.5.2 // indirect
-	github.com/patrickmn/go-cache v2.1.0+incompatible // indirect
-	github.com/stretchr/objx v0.1.0 // indirect
+	github.com/hashicorp/go-cleanhttp v0.5.2
+	github.com/patrickmn/go-cache v2.1.0+incompatible
+	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c
 )
+
+require github.com/stretchr/objx v0.1.0 // indirect

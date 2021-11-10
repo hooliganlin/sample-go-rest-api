@@ -43,6 +43,10 @@ func TestGetUserPostsHandler(t *testing.T) {
 		},
 	}
 
+	mockContext := mock.MatchedBy(func(ctx context.Context) bool {
+		return true
+	})
+
 	t.Run("successful response", func(t *testing.T) {
 		mockClient := new(MockUserClient)
 		logger := zerolog.New(io.Discard)
@@ -51,8 +55,8 @@ func TestGetUserPostsHandler(t *testing.T) {
 		recorder := httptest.NewRecorder()
 		recorder.WriteHeader(http.StatusOK)
 
-		mockClient.On("GetUserInfo", req.Context(), "1").Return(u, nil)
-		mockClient.On("GetUserPosts", req.Context(), "1").Return(posts, nil)
+		mockClient.On("GetUserInfo", mockContext, "1").Return(u, nil)
+		mockClient.On("GetUserPosts", mockContext, "1").Return(posts, nil)
 
 		handler.GetUserPostsHandler(recorder, req)
 		expectedResult := toUserInfoResponse(u, posts)
@@ -73,7 +77,7 @@ func TestGetUserPostsHandler(t *testing.T) {
 		resp := recorder.Result()
 
 		err := user.NewAPIClientError(resp, req)
-		mockClient.On("GetUserInfo", req.Context(), "1").Return(user.User{}, err)
+		mockClient.On("GetUserInfo", mockContext, "1").Return(user.User{}, err)
 
 		handler.GetUserPostsHandler(recorder, req)
 		assert.Equal(t, http.StatusNotFound, resp.StatusCode)
@@ -92,8 +96,8 @@ func TestGetUserPostsHandler(t *testing.T) {
 		resp := recorder.Result()
 
 		err := user.NewAPIClientError(resp, req)
-		mockClient.On("GetUserInfo", req.Context(), "1").Return(u, nil)
-		mockClient.On("GetUserPosts", req.Context(), "1").Return([]user.Post{}, err)
+		mockClient.On("GetUserInfo", mockContext, "1").Return(u, nil)
+		mockClient.On("GetUserPosts", mockContext, "1").Return([]user.Post{}, err)
 
 		handler.GetUserPostsHandler(recorder, req)
 		assert.Equal(t, http.StatusNotFound, resp.StatusCode)
